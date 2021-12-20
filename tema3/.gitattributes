@@ -1,0 +1,2 @@
+*.py linguist-detectable=false
+*.asm linguist-detectable=true

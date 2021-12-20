@@ -1,0 +1,75 @@
+# Iancu Alexandru-Gabriel 324CD
+
+1. iocla_atoi
+
+Functia primeste un sir de caractere format din cifre si intoarce numarul
+omolog in zecimal.
+
+Aceasta parcurge sirul caracter cu caracter pana ajunge la final. Se opreste
+in momentul in care contorul este egal cu lungimea sirului (calculata cu
+strlen).
+
+Scazand 48 din caracterul ASCII ajung la valoarea acestuia. 
+Ex: "1" in ASCII este 49 => 49 - 48 = 1
+Inmultesc registrul eax cu 10 si adun la 0-ul ce se formeaza la final
+cifra corespunzatoare.
+Ex: Sirul: "378" cifra: 51 - 48 = 3 eax: 0 * 10 + 3 = 3
+    Sirul: "78" cifra: 7 eax: 30 + 7 = 37
+    Sirul: "8" cifra: 8 eax: 370 + 8 = 378
+
+Dupa ce s-a ajuns la final numarul poate fi accesat prin eax in apelant. 
+In cazul in care numarul primit ca parametru este negativ, atunci verific 
+acest lucru inainte de iteratie comparand primul caracter, care ar trebui sa
+fie "-", cu 45("-" in ASCII) si stochez valoarea de adevar in variabila 
+is_negative. Incrementez contorul pentru a sari peste minus si a incepe prima
+iteratie cu prima cifra. La final daca numarul este negativ, atunci neg
+numarul creat in loop.
+
+2. create_tree
+
+Functia creeaza un AST pe baza sirului primit ca parametru si intoarce
+prin registrul eax adresa la care se afla radacina arborelui creat.
+
+Pentru parcurgerea sirului ma folosesc de functia externa strtok prin
+care iau token-urile aflate intre spatii si le stochez la o adresa in heap.
+Acea adresa din heap o stochez in sectiunea Data din memorie prin
+intermediul variabilei tokens pe care o folosesc ca offset. Fac acest lucru
+pentru ca sectiunea Data imi e mai accesibila, fara artificii, in alte
+functii(create_tree_recursive).
+
+Pentru crearea arborelui ma folosesc de o functie auxiliara recursiva pe
+care o apelez in interiorul functiei create_tree.
+
+3. create_tree_recursive
+
+Functia recursiva creeaza un nod pentru un operator sau operand. Daca nodul
+este al unui operator se creeaza recursiv si fii acestuia.
+
+Verific daca token-ul este operator folosind functia externa strchr care
+cauta primul caracter al sirului in sirul constant operations ce contine
+cei 4 operatori "+", "-", "*" si "/". Daca se descopera ca e operator,
+atunci se apeleaza functia create_tree_recursive si pentru fii acestuia,
+iar in caz contrar se merge direct la alocarea de spatiu pentru nod.
+
+Un caz special sunt numerele negative care au primul caracter "-" ce
+reprezinta un operator, astfel acestea si-ar apela recursiv fii desi 
+n-ar trebui sa poata. Pentru a combate problema, dupa prima verificare
+de operator mai am un filtru care nu permite token-urilor care sunt mai
+mari decat de 1 caracter sa-si apelezi fii. Cum toti operatorii au
+token-uri corespunzatoare de un caracter, iar toate numerele negative
+au cel putin doua caractere(minus si cel putin o cifra), atunci sigur
+doar operatorii vor trece acest filtru.
+
+Fiecare apel recursiv de fiu intoarce prin eax adresa fiului corespunzator.
+Ma folosesc de stiva de executie pentru a stoca adresa nodului stang pentru
+a o putea accesa dupa ce se iese din cele n apelari facute pentru nodul drept.
+De asemenea ma folosesc de stiva la inceput de apel pentru a urca token-ul.
+
+Aloc memorie pentru nodul operator dupa ce am creat nodurile fii si
+stochez in acesta adresa token-ului pe primii 4 octeti, adresa nodului
+stang pe urmatorii 4 si adresa nodului drept. 
+
+In cazul in care un operand ajunge la alocare, atunci pe primii 4 octeti se va afla token-ul corespunzator acestuia si urmatorii 8 vor fi nuli. Ii fac 0
+pe registrii edi si ebx, pe care ii folosesc pentru nodurile fii,
+inainte de a face verificarile pentru operator pentru a-i avea nuli la
+crearea unui operand.

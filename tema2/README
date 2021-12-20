@@ -1,0 +1,139 @@
+# Iancu Alexandru-Gabriel 324CD
+
+1. OTP:
+
+Adresa string-urilor este stocata in registrele esi si edi si astfel a trebuit sa le dereferentiez 
+pentru a accesa caracterele in sine. Registrul ebx, ca toate celelalte, are 4 octeti si imi permite 
+sa stochez in el 4 caractere din primul string pe care le obtin prin diferentiere la registrul esi.
+
+Voi accesa caracterele 4 cate 4 de la final spre inceput, ultimele 4 caractere din ambele string-uri
+fiind pe pozitiile (length - 4, length - 1) inclusiv. Asupra celor 4 ultime caractere pe care le-am stocat in
+ebx voi face XOR logic cu cele 4 ultime caractere din al doilea string.
+
+Scad cu 4 valoarea length-ului ca la urmatoarea iteratie sa stochez in ebx cele 4 caractere care se afla cu
+4 octeti mai in spate decat caracterele procesate la iteratia precedenta. In cazul in care sirurile au lungime
+care se imparte exact la 4, in iteratia in care length ajunge sa fie fix 4 se vor procesa primele 4 caractere care
+sunt pe pozitiile (4-4, 4-1) = (0, 3). La finalul iteratiei length devenind 0 se activeaza flag-ul ZF si
+pentru ca s-au procesat toate caracterele il pun sa sara la final. In cazul in care sirurile nu au lungime care
+se imparte fix la 4, la ultima iteratie length devine negativ si se activeaza flag-ul de semn si il pun
+sa sara la final.
+
+UPDATE:
+Pentru a avea un singur caz am decrementat length-ul la inceput ca si in cazul in care se imparte exact la 4
+sa ajunga negativ dupa scadere. Astfel am scapat de jumpul pentru ZF = 1 si l-am lasat doar pe cel pentru SF = 1.
+Pentru ca am decrementat length-ul am adaugat un +1 la offset in pointeri.
+
+2. Caesar Cipher:
+
+Pentru a-mi usura rotirile voi calcula restul dintre cheie si 26, 26 fiind numarul de litere din alfabetul englez.
+Mut in variabila key restul calculat pentru a-l muta in registrul edi la fiecare iteratie(registrul edi
+se depreciaza de-a lungul unei iteratii).
+
+Stochez in registrul ebx caracterul curent de procesat care este reprezentat de assembly in ascii.
+Daca caracterul curent e mai mic de 65('A') sigur nu e litera asa ca nu il rotesc. 
+
+Daca e mai mic decat 90 si mai mare sau egal cu 65 sigur e majuscula asa ca il voi roti corespunzator la
+labelul majuscule. Calculez diferenta de pozitii dintre ultima litera('Z') si litera curenta, daca trebuie
+sa rotesc cu mai putin sau egal cu diferenta asta il rotesc pur si simplu. Altfel zic ca am rotit deja pana 
+la 'Z' si scad valoarea aia din cat am de rotit per total. Ce mai ramane adaug la 64 pentru a-l roti
+la pozitia corespunzatoare(64 in loc de 65 din cauza unei off-by-one error).
+
+Daca e mai mare decat 90 fie e minuscula, fie e caracter special. Daca e mai mic decat 97 sau mai mare decat
+122 e caracter special asa ca nu il rotesc. Daca e intre 97 si 122 inclusiv sigur e minuscula asa ca sar la
+labelul minuscule. Analog metodei pentru majuscule voi calcula cu cat trebuie sa rotesc, doar ca tin cont
+de faptul ca s-au schimbat marginile la 97 si 122.
+
+Adaug caracterul criptat in ciphertext si scad contorul(ecx). Apoi merg la urmatoarea iteratie cu un caracter in spate, 
+algoritmul ca cel de la OTP cripteaza de la final spre inceput.
+
+3. Vigenere
+
+Pentru a cripta in stil vigenere creez cheia extinsa si o stochez in ciphertext si apoi inlocuiesc treptat cu caracterul
+rotit corespunzator pozitiei.
+
+Pentru a crea cheia extinsa ma folosesc de 2 contoare, unul pentru cheie si altul pentru cheia extinsa(si plaintext).
+Verific daca caracterul corespunzator pozitiei curente este litera, daca este adaug inca o litera din cheie si cresc
+contoarele. Daca nu inseamna ca este caracter special si astfel nu voi avea nevoie de litera din cheie pentru ca
+acele caractere nu se vor roti. Acea pozitie va fi umpluta cu un space pentru ca oricum cand voi procesa mai tarziu
+textul nu va conta ce este in indexul corespunzator din cheia extinsa. Dupa ce se adauga ultima litera din
+cheie se reseteaza contorul cheii si se mai copie inca o data treptat caracterele din cheie in cheia extinsa, procesul 
+se repeta pana cand cheia extinsa va fi la fel de mare ca textul.
+
+Pentru a doua parte am refolosit codul de la taskul 2. Singura diferenta este ca aici trebuie sa calculez cu cat voi
+roti caracterul la fiecare iteratie. Iau caracterul corespunzator din cheia extinsa si scad 65 pentru a ajunge la pozitia 
+sa din alfabet('A' - 65 = 0). Ma voi folosi de variabila rot_number pentru a stoca numarul de rotatii de la iteratia curenta 
+pentru ca registrul eax se refoloseste.
+
+4. My_strstr
+
+De data aceasta contoarele incep de la 0 si verific sirul de la inceput spre final. Verific daca caracterul curent din
+haystack este egal cu caracterul curent din needle, daca da atunci merg la labelul egalitate. Incrementez contorul
+needle-lului si daca este egal cu lungimea sirului in sine, atunci s-a gasit subsirul si merg la labelul
+egalitate_absoluta. Salvez in pointerul de tip int pozitia curenta din haystack, la care scad marimea subsirului pentru
+a ajunge la indexul de inceput al subsirului din haystack.
+
+Daca cumva cand suntem la labelul egalitate nu am gasit subsirul, atunci se incrementeaza contorul needle si daca nu
+s-a ajuns la sfarsitul haystackului se continua iteratia.
+
+Cand nu se gaseste o egalitate in labelul iteratie intre caracterele din needle si haystack, atunci resetez contorul 
+needle-lului pentru ca subsirul pe care l-am verificat nu era cel bun. Insa este un caz special in care contorul la 
+haystack se compromite. Spre exemplu pentru sirul "memere", contorul verifica "mem" si vede ca nu este subsirul dorit.
+Contorul merge mai departe in sirul "ere" si nu gaseste niciun subsir de tip "mere". Daca scad contorul needle din 
+contorul haystack se gaseste subsirul "mere". Am facut o reprezentare concreta mai jos.
+
+.
+012345
+memere n = 0 h = 0 egalitate => n++ h++ (n e contorul needle si h e contorul haystack)
+
+ .
+012345
+memere n = 1 h = 1 egalitate => n++ h++
+
+  .
+012345
+memere n = 2 h = 2 nu e egalitate => h = h - n = 0 ; n = n ^ n = 0; h++
+
+ .
+012345
+memere n = 0 h = 1 nu e egalitate => h++
+
+  .
+012345
+memere n = 0 h = 2 egalitate => n++ h++
+
+   .
+012345
+memere n = 1 h = 3 egalitate => n++ h++
+
+    .
+012345
+memere n = 2 h = 4 egalitate => n++ h++
+
+     .
+012345
+memere n = 3 h = 5 egalitate => n++ h++;
+
+n = 4 = sizeof("mere") => DING DING DING Am gasit subsirul
+
+5. Binary to hexadecimal
+
+Intai calculez cate cifre hexazecimale voi avea impartind numarul de biti din sirul binar la 4, astfel catul va fi
+cu 1 mai putin decat numarul de cifre si ma voi folosi de acest numar drept index al cifrei in sir si drept contor.
+Daca sunt un numar de biti care se impart exact la 4 voi avea fix cate cifre din hexa trebuie sa afisez asa ca va 
+trebui sa decrementez pentru a pastra calitatea de contor.
+
+Procesez fiecare bit din sir de la sfarsit la inceput si voi scadea 48 din acesta pentru ca e stocat sub forma
+de caracter si are stocata valoarea din ascii(rezulta valoarea 0 sau 1).
+
+Intr-o variabila op_inmultire tin cont de puterea bitului. Daca am ajuns la bitul 0 va fi egal cu 1, daca am
+ajuns la bitul 1 va fi egal cu 2 s.a.m.d., astfel ca la fiecare iteratie op_inmultire se va dubla. Stochez
+intr-o variabila hex_number suma bitilor pentru a forma cifra hexazecimala.
+
+Variabila contor_biti tine cont de numarul de biti procesati de la ultima cifra hexazecimala afisata. In momentul
+in care este egala cu 4 inseamna ca s-au procesat 4 biti si variabila hex_number detine valoarea urmatoarei cifre
+de afisat. Resetez contor_biti si ma duc sa procesez hex_number. Daca contor_biti este mai mic de 4
+se face inca o iteratie.
+
+La procesare folosesc un sir auxiliar(hex_chars) care contine la indexul valorii cifrei hexazecimale caracterul
+corespunzator acesteia. Caut caracterul in sir folosindu-ma de variabila hex_number calculata anterior si o
+stochez in sirul de output.

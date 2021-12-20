@@ -1,0 +1,72 @@
+# Iancu Alexandru-Gabriel 324CD
+
+Pentru rezolvarea temei m-am decis sa fac o parcurgere standard a string-ului.
+M-am folosit de un pointer de tip char care parcurge tot string-ul pana la final(caracterul null).
+
+Parcurgand caracter cu caracter string-ul am putut sa verific la fiecare pas daca caracterul curent
+este "%", moment in care urmatorul caracter ar fi un specificator sau un alt "%".
+
+Folosindu-ma de pointerul char* j pentru a tine cont de textul de dupa ultimul specificator sau
+de la inceputul string-ului in cazul in care sunt la primul specificator. Astfel in cazul in care
+este text intre 2 specificatori consecutivi il afisez in stream.
+
+In functie de specificator voi actiona corespunzator:
+
+1. %s
+
+Citesc direct argumentul ca char* si il afisez.
+
+2. %u
+
+Citesc argumentul ca unsigned int si ma folosesc de o functie pentru a transforma unsigned int-ul in
+string. M-am decis sa afisez cifra cu cifra folosindu-ma de restul numarului la 10.
+Problema era ca daca afisam fix cum calculam restul ar fi iesit in stream invers, asa ca am scris
+o functie recursiva in care intai faceam apelul la propria functie si apoi scriam pentru a le afisa in
+ordinea care trebuie. Pentru a face trecerea de la unsigned int la string m-am folosit de un string
+ajutator care avea toate cifrele in format char pe pozitia corespunzatoare valorii ('0' pe pozitia 0, '1' pe
+pozitia 1 s.a.m.d.).
+
+3. %c
+
+Citesc argumentul ca int si il salvez intr-un char. Iau un pointer char in care salvez adresa caracterului si 
+il dau ca argument functiei write_stdout.
+
+4. %d
+
+Citesc argumentul ca int si il salvez intr-un int. Functia pe care o folosesc pentru a transforma int-ul
+in string este foarte asemanatoare cu cea folosita pentru unsigned int. Diferenta este ca dau ca parametru
+semnul numarului pentru ca atunci cand numarul este negativ sa mai afisez si caracterul minus(-).
+
+5. %x
+
+Citesc argumentul ca unsigned int si il salvez intr-un unsigned int. M-am decis pentru unsigned int pentru
+ca e mai usor sa fac conversia din decimal in hexa cand numarul e pozitiv. Daca primeste ca argument un numar
+negativ, avand tipul unsigned int se va salva in variabila omologul pozitiv al numarului. Numarul fara semn
+corespunzator celui cu semn este reprezentat in hexa la fel.
+
+Functia de transformare din unsigned int in string-ul ce reprezinta valoare in hexa este asemanatoare cu cel 
+care transforma unsigned int in string. Singurele diferente sunt faptul ca afisez restul la 16 in loc de 
+restul la 10 si ca ma folosesc de alt string pentru a lua caractere. String-ul este format din reprezentarea 
+drept char a cifrelor de baza din hexa puse pe pozitiile corespunzatoare valorii din decimal
+('a' este pe pozitia 10, 'b' este pe pozitia 11 s.a.m.d.).
+
+6. %%
+
+In caz ca dupa '%' e un alt '%', afisez drept text un '%'. 
+
+		       0123	
+Daca as primi formatul %%%d:
+-la prima iteratie i-ul e pe pozitia 0 si s-ar satisface situatia %% si s-ar afisa un '%'
+-la a doua iteratie i-ul e pe pozitia 1 si s-ar satisface situatia %% si s-ar afisa un '%'
+- la a treia iteratie e cazul %d si se afiseaza argumentul int
+
+In aceasta situatie s-ar afisa %%(int) in loc de %(int), asa ca daca intalnesc situatia %%
+voi creste i-ul pentru a sari peste iteratia in plus(a doua iteratie).
+
+7. % + orice alt caracter
+
+Il atentionez pe utilizator ca formatul e gresit si opresc programul returnand -1.
+
+
+Dupa ce am afisat toate argumentele voi afisa ce text a ramas dupa ultimul specificator si returnez la final
+numarul de caractere.

